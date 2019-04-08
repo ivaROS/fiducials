@@ -495,28 +495,32 @@ int Map::updatePose(vector<Observation>& obs, const ros::Time &time,
              tf2::Vector3 c = odomTransform.getOrigin();
              ROS_INFO("odom   %lf %lf %lf",
                 c.x(), c.y(), c.z());
+                
+                
+             // Make outgoing transform make sense - ie only consist of x, y, yaw
+             // This can be disabled via the publish_6dof_pose param, mainly for debugging
+             if (!publish_6dof_pose) {
+                 tf2::Vector3 translation = outPose.transform.getOrigin();
+                 translation.setZ(0);
+                 outPose.transform.setOrigin(translation);
+                 double roll, pitch, yaw;
+                 outPose.transform.getBasis().getRPY(roll, pitch, yaw);
+                 outPose.transform.getBasis().setRPY(0, 0, yaw);
+             }
+
+             poseTf = toMsg(outPose);
+             poseTf.child_frame_id = outFrame;
+             havePose = true;
+
+
+
          }
     }
- 
-    // Make outgoing transform make sense - ie only consist of x, y, yaw
-    // This can be disabled via the publish_6dof_pose param, mainly for debugging
-    if (!publish_6dof_pose) {
-        tf2::Vector3 translation = outPose.transform.getOrigin();
-        translation.setZ(0);
-        outPose.transform.setOrigin(translation);
-        double roll, pitch, yaw;
-        outPose.transform.getBasis().getRPY(roll, pitch, yaw);
-        outPose.transform.getBasis().setRPY(0, 0, yaw);
-    }
-
-    poseTf = toMsg(outPose);
-    poseTf.child_frame_id = outFrame;
-    havePose = true;
-
+    
     if (publishPoseTf) {
-        publishTf();
+      publishTf();
     }
-
+ 
     ROS_INFO("Finished frame\n");
     return numEsts;
 }
@@ -525,9 +529,12 @@ int Map::updatePose(vector<Observation>& obs, const ros::Time &time,
 
 void Map::publishTf()
 {
+  if(havePose)
+  {
     tfPublishTime = ros::Time::now();
     poseTf.header.stamp = tfPublishTime + ros::Duration(future_date_transforms);
     broadcaster.sendTransform(poseTf);
+  }
 }
 
 // publish latest tf if enough time has elapsed
